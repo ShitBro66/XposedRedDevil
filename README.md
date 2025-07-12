@@ -1,6 +1,6 @@
 # XposedRedDevil
-新增群ID过滤功能 私聊红包不抢功能现已完善
-xposed框架抢红包参考https://blog.csdn.net/xiao_nian/article/details/79391417
+新增群ID过滤功能 私聊红包不抢功能现已完善 适配8.0.61
+<Br/>xposed框架抢红包参考https://blog.csdn.net/xiao_nian/article/details/79391417
 <Br/>免xposed框架抢红包参考https://www.jianshu.com/p/cd1cd53909d7
 <Br/>实现xposed框架与免xposed框架抢红包代码，现适配7.0.20。
 <Br/>效果：

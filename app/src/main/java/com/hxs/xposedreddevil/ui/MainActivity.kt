@@ -63,11 +63,9 @@ class MainActivity : BaseActivity() {
             config.red = b
             SuUtil.kill("com.tencent.mm")
         }
-        //TODO 不抢私聊红包
         binding!!.swSlno.setOnCheckedChangeListener { compoundButton: CompoundButton?, b: Boolean ->
-            binding!!.swSlno.isChecked = false
-            Toast.makeText(this, "还在开发中~", Toast.LENGTH_SHORT).show()
             config.privates = b
+            SuUtil.kill("com.tencent.mm")
         }
         binding!!.swSleep.setOnCheckedChangeListener { compoundButton: CompoundButton?, b: Boolean ->
             config.sleep = b
@@ -110,6 +108,14 @@ class MainActivity : BaseActivity() {
                 Intent(
                     this@MainActivity,
                     SelectFilterActivity::class.java
+                )
+            )
+        }
+        binding!!.llGroupIdFilter.setOnClickListener { v: View? ->
+            startActivity(
+                Intent(
+                    this@MainActivity,
+                    GroupIdFilterActivity::class.java
                 )
             )
         }

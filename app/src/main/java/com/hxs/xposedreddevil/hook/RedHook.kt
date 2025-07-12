@@ -181,58 +181,40 @@ class RedHook  // 加载dexkit
 //                                        System.out.println("------------------------insert start---------------------" + "\n\n");
                                         val contentValues = param.args.get(2) as ContentValues
                                         var title = ""
+                                        var realTalker = ""
+                                        
+                                        // 清空之前的stringMap
+                                        stringMap.clear()
+                                        
                                         for ((key, value) in contentValues.valueSet()) {
                                             if (value != null) {
                                                 if (key.contains("content")) {
                                                     content = value.toString()
                                                 }
-                                                //                                                System.out.println(item.getKey() + "---------" + item.getValue().toString().split("\n"));
-                                                //过滤选择不抢的群组
                                                 if (key == "talker") {
-                                                    if (config.selectfilter != ""
-                                                    ) {
-                                                        val list: MutableList<FilterSaveBean?> =
-                                                            ArrayList<FilterSaveBean?>()
-                                                        val jsonArray: JsonArray = parser.parse(
-                                                            config.selectfilter
-                                                        ).asJsonArray
-                                                        for (user in jsonArray) {
-                                                            filterSaveBean = FilterSaveBean()
-                                                            //使用GSON，直接转成Bean对象
-                                                            filterSaveBean =
-                                                                gson.fromJson<FilterSaveBean>(
-                                                                    user,
-                                                                    FilterSaveBean::class.java
-                                                                )
-                                                            list.add(filterSaveBean)
-                                                        }
-                                                        for (i in list.indices) {
-                                                            if (list[i]!!.name == value.toString()) {
-                                                                return
-                                                            }
-                                                        }
-                                                    }
+                                                    title = value.toString()
+                                                    realTalker = value.toString()
                                                 }
-                                                //                                                System.out.println(item.getKey());
-                                                try {
-                                                    if (key == "content") {
-                                                        val data = value.toString()
-                                                        // System.out.println.d(TAG, "afterHookedMethod: " + data);
-//                                                        System.out.println("头头：" + title);
-                                                        title =
-                                                            data.split("<receivertitle>".toRegex())
-                                                                .dropLastWhile { it.isEmpty() }
-                                                                .toTypedArray()[1].split("</receivertitle>".toRegex())
-                                                                .dropLastWhile { it.isEmpty() }
-                                                                .toTypedArray()[0]
-                                                    }
-                                                } catch (ignored: Exception) {
+                                                //记录talker信息
+                                                if (key == "talker") {
+                                                    stringMap["talker"] = value.toString()
                                                 }
-                                                stringMap[key] = value.toString()
+                                                if (key.contains("isSend")) {
+                                                    stringMap[key] = value.toString()
+                                                } else {
+                                                    stringMap[key] = "null"
+                                                }
                                             } else {
                                                 stringMap[key] = "null"
                                             }
                                         }
+                                        
+                                        println("=== ContentValues调试信息 ===")
+                                        println("realTalker from ContentValues: '$realTalker'")
+                                        println("title: '$title'")
+                                        println("stringMap['talker']: '${stringMap["talker"]}'")
+                                        println("stringMap size: ${stringMap.size}")
+                                        
                                         //                                        System.out.println("------------------------insert end---------------------" + "\n\n");
                                         // 判断插入的数据是否是发送过来的消息
                                         val tableName = param.args.get(0) as String
@@ -251,7 +233,7 @@ class RedHook  // 加载dexkit
 //                                                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
 //                                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 //                                                context.startActivity(intent);
-                                            if (handleBefore(title)) {
+                                            if (handleBefore(title, realTalker)) {
                                                 // 处理红包消息
                                                 handleLuckyMoney(contentValues, cl)
                                             }
@@ -359,17 +341,71 @@ class RedHook  // 加载dexkit
         }
     }
 
-    private fun handleBefore(title: String): Boolean {
-        println("safe状态：" + config.redMain)
+    private fun handleBefore(title: String, realTalker: String): Boolean {
+        println("=== 红包处理开始 ===")
+        println("主开关状态：" + config.redMain)
+        println("私聊过滤开关：" + config.privates)
+        println("自己发的不抢开关：" + config.red)
+        
         var title = title
         if (!config.redMain) {
+            println("主开关关闭，不处理红包")
             return false
         }
+        
+        // 检查是否自己发的红包
         if (config.red) {
-            if (stringMap["isSend"] == "1") {
+            if ((stringMap["isSend"] as? String) == "1") {
+                println("自己发的红包，不抢")
                 return false
             }
         }
+        
+        // 使用传入的realTalker，如果为空则尝试从stringMap获取
+        val talker = if (realTalker.isNotEmpty()) {
+            realTalker
+        } else {
+            (stringMap["talker"] as? String) ?: ""
+        }
+        
+        println("传入的realTalker: '$realTalker'")
+        println("stringMap中的talker: '${stringMap["talker"]}'")
+        println("最终使用的talker: '$talker'")
+        println("talker长度: ${talker.length}")
+        
+        // 如果talker仍然为空，记录错误并返回false
+        if (talker.isEmpty() || talker == "null") {
+            println("错误：talker为空或null，无法判断群聊/私聊类型")
+            println("stringMap内容: $stringMap")
+            return false
+        }
+        
+        // 判断是群聊还是私聊
+        val isGroupChat = talker.contains("@chatroom")
+        println("群聊判断详情: '$talker'.contains('@chatroom') = $isGroupChat")
+        
+        if (isGroupChat) {
+            println("这是群聊红包")
+            // 这是群聊红包，检查群聊过滤
+            println("检查群聊是否在过滤列表中...")
+            println("群聊过滤列表内容: '${config.selectfilter}'")
+            if (isGroupInFilterList(talker, title)) {
+                println("群聊红包被过滤，跳过：$talker")
+                return false
+            } else {
+                println("群聊不在过滤列表中，处理群聊红包")
+            }
+        } else {
+            println("这是私聊红包")
+            // 这是私聊红包
+            if (config.privates) {
+                println("111私聊红包过滤开启，跳过私聊红包：$talker")
+                return false
+            } else {
+                println("私聊红包过滤关闭，处理私聊红包")
+            }
+        }
+        
         if (config.sound) {
             PlaySoundUtils.Play()
         }
@@ -389,12 +425,14 @@ class RedHook  // 加载dexkit
                 title.contains("gua") ||
                 title.contains("g")
             ) {
+                println("检测到口令红包，跳过")
                 return false
             }
         } catch (e: Exception) {
             e.printStackTrace()
             println(e)
         }
+        println("=== 通过所有检查，准备抢红包 ===")
         return true
     }
 
@@ -477,5 +515,159 @@ class RedHook  // 加载dexkit
         @JvmStatic
         val instance: RedHook
             get() = RedHookHolder.instance
+    }
+    
+    /**
+     * 检查群聊是否在过滤列表中
+     */
+    private fun isGroupInFilterList(talker: String, content: String): Boolean {
+        println("=== 检查群聊过滤开始 ===")
+        println("talker: $talker")
+        
+        // 首先检查群ID过滤列表
+        if (isGroupInIdFilterList(talker)) {
+            println("群聊在群ID过滤列表中: $talker")
+            return true
+        }
+        
+        // 然后检查原有的群聊过滤列表
+        println("config.selectfilter: ${config.selectfilter}")
+        
+        if (config.selectfilter.isEmpty() || config.selectfilter.isBlank()) {
+            println("群聊过滤列表为空或空白，不过滤任何群聊")
+            return false
+        }
+        
+        try {
+            val jsonArray: JsonArray = parser.parse(config.selectfilter).asJsonArray
+            
+            if (jsonArray.size() == 0) {
+                println("群聊过滤列表解析后为空，不过滤任何群聊")
+                return false
+            }
+            
+            println("解析到 ${jsonArray.size()} 个过滤项")
+            
+            for (i in 0 until jsonArray.size()) {
+                try {
+                    val element = jsonArray.get(i)
+                    if (element == null || element.isJsonNull) {
+                        println("跳过空的过滤项 $i")
+                        continue
+                    }
+                    
+                    val filterItem = gson.fromJson(element, FilterSaveBean::class.java)
+                    if (filterItem == null || filterItem.name == null) {
+                        println("跳过无效的过滤项 $i")
+                        continue
+                    }
+                    
+                    println("检查过滤项 $i: name='${filterItem.name}', displayname='${filterItem.displayname}'")
+                    
+                    // 简化逻辑：直接使用群ID匹配
+                    val filterGroupId = filterItem.name.trim()
+                    
+                    // 精确匹配群ID
+                    if (filterGroupId == talker) {
+                        println("群聊在过滤列表中(群ID精确匹配): $talker")
+                        return true
+                    }
+                    
+                    // 如果过滤项不包含@chatroom，自动添加后再匹配
+                    if (!filterGroupId.contains("@chatroom")) {
+                        val fullGroupId = "$filterGroupId@chatroom"
+                        if (fullGroupId == talker) {
+                            println("群聊在过滤列表中(补全@chatroom后匹配): $talker")
+                            return true
+                        }
+                    }
+                    
+                } catch (e: Exception) {
+                    println("处理过滤项 $i 时出错: $e")
+                    e.printStackTrace()
+                    // 继续处理下一个项目
+                }
+            }
+            
+            println("群聊不在过滤列表中: $talker")
+            return false
+            
+        } catch (e: Exception) {
+            println("检查群聊过滤列表时出错: $e")
+            e.printStackTrace()
+            // 出错时不过滤，允许红包被抢
+            println("出错时不过滤，允许抢红包")
+            return false
+        }
+    }
+    
+    /**
+     * 检查群聊是否在群ID过滤列表中
+     */
+    private fun isGroupInIdFilterList(talker: String): Boolean {
+        println("=== 检查群ID过滤开始 ===")
+        println("talker: $talker")
+        println("config.groupIdFilterEnabled: ${config.groupIdFilterEnabled}")
+        
+        if (config.groupIdFilterEnabled.isEmpty() || config.groupIdFilterEnabled.isBlank()) {
+            println("群ID过滤列表为空或空白，不过滤任何群聊")
+            return false
+        }
+        
+        try {
+            val jsonArray: JsonArray = parser.parse(config.groupIdFilterEnabled).asJsonArray
+            
+            if (jsonArray.size() == 0) {
+                println("群ID过滤列表解析后为空，不过滤任何群聊")
+                return false
+            }
+            
+            println("解析到 ${jsonArray.size()} 个群ID过滤项")
+            
+            for (i in 0 until jsonArray.size()) {
+                try {
+                    val element = jsonArray.get(i)
+                    if (element == null || element.isJsonNull) {
+                        println("跳过空的群ID过滤项 $i")
+                        continue
+                    }
+                    
+                    val filterItem = gson.fromJson(element, com.hxs.xposedreddevil.model.GroupIdFilterBean::class.java)
+                    if (filterItem == null || filterItem.groupId.isEmpty()) {
+                        println("跳过无效的群ID过滤项 $i")
+                        continue
+                    }
+                    
+                    println("检查群ID过滤项 $i: groupId='${filterItem.groupId}', groupName='${filterItem.groupName}', enabled=${filterItem.isEnabled}")
+                    
+                    // 只检查启用的过滤项
+                    if (!filterItem.isEnabled) {
+                        println("跳过未启用的群ID过滤项 $i")
+                        continue
+                    }
+                    
+                    // 使用GroupIdFilterBean的matches方法进行匹配
+                    if (filterItem.matches(talker)) {
+                        println("群聊在群ID过滤列表中: $talker 匹配 ${filterItem.groupId}")
+                        return true
+                    }
+                    
+                } catch (e: Exception) {
+                    println("处理群ID过滤项 $i 时出错: $e")
+                    e.printStackTrace()
+                    // 继续处理下一个项目
+                }
+            }
+            
+            println("群聊不在群ID过滤列表中: $talker")
+            return false
+            
+        } catch (e: Exception) {
+            println("检查群ID过滤列表时出错: $e")
+            e.printStackTrace()
+            // 出错时不过滤，允许红包被抢
+            println("出错时不过滤，允许抢红包")
+            return false
+        }
     }
 }

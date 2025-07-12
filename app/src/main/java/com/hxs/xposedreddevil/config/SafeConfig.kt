@@ -19,6 +19,8 @@ class SafeConfig {
     var notrooown: Boolean by serialLazy(false)
     var filter: String by serial("")
     var selectfilter: String by serial("")
+    var groupIdFilter: String by serial("")
+    var groupIdFilterEnabled: String by serial("")
     var nottootname: String by serial("")
     var redskin: String by serial("亮色")
     var wechatversion: String by serial("未知版本")

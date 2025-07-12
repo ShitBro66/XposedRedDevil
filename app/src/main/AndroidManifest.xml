@@ -46,6 +46,9 @@
         <activity
             android:name=".ui.SelectFilterActivity"
             android:theme="@style/FilterTheme" />
+        <activity
+            android:name=".ui.GroupIdFilterActivity"
+            android:theme="@style/FilterTheme" />
 
         <meta-data
             android:name="design_width_in_dp"

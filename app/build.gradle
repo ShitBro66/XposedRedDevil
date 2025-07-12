@@ -9,7 +9,7 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 31
         versionCode 91
-        versionName "2.7.1"
+        versionName "2.8"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         useLibrary 'org.apache.http.legacy'
         ndk{
